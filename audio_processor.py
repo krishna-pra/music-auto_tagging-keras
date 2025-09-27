@@ -1,38 +1,31 @@
-import librosa
 import numpy as np
+import librosa
+
+SR = 12000
+DURATION = 29
+SAMPLES_PER_TRACK = SR * DURATION  # 348000
 
 
-def compute_melgram(audio_path):
-    ''' Compute a mel-spectrogram and returns it in a shape of (1,1,96,1366), where
-    96 == #mel-bins and 1366 == #time frame
+def prepare_audio(filename):
+    """
+    Load and preprocess audio for the model.
+    Returns shape: (1, 1, 348000) → (batch_size, channels, length)
+    """
 
-    parameters
-    ----------
-    audio_path: path for the audio file.
-                Any format supported by audioread will work.
-    More info: http://librosa.github.io/librosa/generated/librosa.core.load.html#librosa.core.load
+    # Load mono audio at 12kHz
+    src, sr = librosa.load(filename, sr=SR, duration=DURATION, mono=True)
 
-    '''
+    # Fix length (pad or trim to exactly 348000 samples)
+    if src.shape[0] < SAMPLES_PER_TRACK:
+        pad_width = SAMPLES_PER_TRACK - src.shape[0]
+        src = np.pad(src, (0, pad_width), mode="constant")
+    elif src.shape[0] > SAMPLES_PER_TRACK:
+        src = src[:SAMPLES_PER_TRACK]
 
-    # mel-spectrogram parameters
-    SR = 12000
-    N_FFT = 512
-    N_MELS = 96
-    HOP_LEN = 256
-    DURA = 29.12  # to make it 1366 frame..
+    # Add channel dimension → (1, 348000)
+    src = src[np.newaxis, :]
 
-    src, sr = librosa.load(audio_path, sr=SR)  # whole signal
-    n_sample = src.shape[0]
-    n_sample_fit = int(DURA*SR)
+    # Add batch dimension → (1, 1, 348000)
+    src = np.expand_dims(src, axis=0)
 
-    if n_sample < n_sample_fit:  # if too short
-        src = np.hstack((src, np.zeros((int(DURA*SR) - n_sample,))))
-    elif n_sample > n_sample_fit:  # if too long
-        src = src[(n_sample-n_sample_fit)/2:(n_sample+n_sample_fit)/2]
-    logam = librosa.logamplitude
-    melgram = librosa.feature.melspectrogram
-    ret = logam(melgram(y=src, sr=SR, hop_length=HOP_LEN,
-                        n_fft=N_FFT, n_mels=N_MELS)**2,
-                ref_power=1.0)
-    ret = ret[np.newaxis, np.newaxis, :]
-    return ret
+    return src

@@ -1,64 +1,46 @@
-import time
+import sys
 import numpy as np
+from tensorflow.keras.models import Model
+from compact_cnn.prepare_audio import prepare_audio
+from compact_cnn import models as my_models
+from argparse import Namespace
 from keras import backend as K
-from music_tagger_cnn import MusicTaggerCNN
-from music_tagger_crnn import MusicTaggerCRNN
-import audio_processor as ap
-import pdb
 
 
-def librosa_exists():
-    try:
-        __import__('librosa')
-    except ImportError:
-        return False
+def load_feature_model():
+    """Build CNN up to penultimate layer for feature extraction."""
+    args = Namespace(
+        tf_type="melgram",
+        normalize="no",
+        decibel=True,
+        fmin=0.0,
+        fmax=6000,
+        n_mels=96,
+        trainable_fb=False,
+        trainable_kernel=False,
+    )
+    model = my_models.build_convnet_model(args, last_layer=True)
+
+    # Take output from penultimate dense layer (before sigmoid)
+    feature_model = Model(inputs=model.input, outputs=model.layers[-2].output)
+    return feature_model
+
+
+def run(filename):
+    audio = prepare_audio(filename)
+
+    # Ensure channels_first
+    assert K.image_data_format() == "channels_first"
+
+    model = load_feature_model()
+    features = model.predict(audio)
+
+    print("Extracted feature shape:", features.shape)
+    print("Feature vector:", features[0][:10], "...")  # show first 10 values
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python example_feat_extract.py <audiofile>")
     else:
-        return True
-
-
-def main(net):
-    ''' *WARNIING*
-    This model use Batch Normalization, so the prediction
-    is affected by batch. Use multiple, different data 
-    samples together (at least 4) for reliable prediction.'''
-
-    print('Running main() with network: %s and backend: %s' % (net, K._BACKEND))
-    # setting
-    audio_paths = ['data/bensound-cute.mp3',
-                   'data/bensound-actionable.mp3',
-                   'data/bensound-dubstep.mp3',
-                   'data/bensound-thejazzpiano.mp3']
-    melgram_paths = ['data/bensound-cute.npy',
-                     'data/bensound-actionable.npy',
-                     'data/bensound-dubstep.npy',
-                     'data/bensound-thejazzpiano.npy']
-
-    # prepare data like this
-    melgrams = np.zeros((0, 1, 96, 1366))
-
-    if librosa_exists:
-        for audio_path in audio_paths:
-            melgram = ap.compute_melgram(audio_path)
-            melgrams = np.concatenate((melgrams, melgram), axis=0)
-    else:
-        for melgram_path in melgram_paths:
-            melgram = np.load(melgram_path)
-            melgrams = np.concatenate((melgrams, melgram), axis=0)
-
-    # load model like this
-    if net == 'cnn':
-        model = MusicTaggerCNN(weights='msd', include_top=False)
-    elif net == 'crnn':
-        model = MusicTaggerCRNN(weights='msd', include_top=False)
-    # predict the tags like this
-    print('Predicting features...')
-    start = time.time()
-    features = model.predict(melgrams)
-    print features[:, :10]
-    return
-
-if __name__ == '__main__':
-
-    networks = ['cnn', 'crnn']
-    for net in networks:
-        main(net)
+        run(sys.argv[1])

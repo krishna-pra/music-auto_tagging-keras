@@ -135,3 +135,19 @@ data/bensound-thejazzpiano.mp3
 * ConvRNN : [*Convolutional Recurrent Neural Networks for Music Classification*](https://scholar.google.co.kr/citations?view_op=view_citation&hl=en&user=ZrqdSu4AAAAJ&sortby=pubdate&citation_for_view=ZrqdSu4AAAAJ:ULOm3_A8WrAC), Keunwoo Choi, George Fazekas, Mark Sandler, Kyunghyun Cho, arXiv:1609.04243, 2016
 
 * Test music items are from [http://www.bensound.com](http://www.bensound.com).
+
+# 🎶 Music Auto-Tagging with Keras + Kapre
+
+This project implements a **music auto-tagging system** using
+[Keras](https://keras.io), [TensorFlow](https://www.tensorflow.org/), and
+[Kapre](https://github.com/keunwoochoi/kapre) for on-the-fly spectrogram
+generation.
+
+The system takes raw audio (e.g., `.mp3`, `.wav`), processes it into mel
+spectrograms, feeds it through a compact CNN (or alternative CNN/CRNN models),
+and predicts **multi-label tags** such as genres, instruments, moods, and more.
+
+---
+
+## 📂 Project Structure
+

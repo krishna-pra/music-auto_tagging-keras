@@ -1,11 +1,11 @@
 import sys
 import numpy as np
 from compact_cnn.prepare_audio import prepare_audio
-from compact_cnn import models as my_models
+import compact_cnn.models as my_models
 from argparse import Namespace
 from keras import backend as K
 
-# Example tag list (replace with real dataset labels if available)
+# Example tag list (replace with your dataset’s tags if different)
 TAGS = [
     "rock", "pop", "alternative", "indie", "electronic", "female vocalists",
     "dance", "00s", "alternative rock", "jazz", "beautiful", "metal",
@@ -18,7 +18,10 @@ TAGS = [
 ]
 
 
-def load_model():
+def load_model(mode="tagger"):
+    """Build and return the convnet model."""
+    assert mode in ("feature", "tagger")
+
     args = Namespace(
         tf_type="melgram",
         normalize="no",
@@ -29,18 +32,28 @@ def load_model():
         trainable_fb=False,
         trainable_kernel=False,
     )
-    return my_models.build_convnet_model(args, last_layer=True)
+
+    model = my_models.build_convnet_model(args, last_layer=(mode == "tagger"))
+    return model
 
 
 def run(filename, top_k=5, threshold=0.2):
+    # Prepare audio (already batch-ready: (1, 1, 348000))
     audio = prepare_audio(filename)
 
-    # Ensure channels_first
-    assert K.image_data_format() == "channels_first"
+    # Ensure channel-first format for Kapre
+    assert K.image_data_format() == "channels_first", (
+        'Keras must be set to "channels_first". '
+        "Check ~/.keras/keras.json"
+    )
 
-    model = load_model()
-    preds = model.predict(audio)[0]
+    # Load model
+    model = load_model("tagger")
 
+    # Predict
+    preds = model.predict(audio)[0]  # shape: (num_tags,)
+    
+    # Get top-k predictions above threshold
     top_indices = np.argsort(preds)[::-1][:top_k]
     results = [(TAGS[i], preds[i]) for i in top_indices if preds[i] >= threshold]
 
@@ -51,6 +64,7 @@ def run(filename, top_k=5, threshold=0.2):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python example_tagging.py <audiofile>")
+        print("Usage: python run.py <audiofile>")
     else:
-        run(sys.argv[1])
+        filename = sys.argv[1]
+        run(filename)
