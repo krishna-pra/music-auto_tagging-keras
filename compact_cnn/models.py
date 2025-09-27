@@ -1,13 +1,13 @@
 """
 models.py
 Defines CNN model architectures for music auto-tagging.
-Updated for TensorFlow 2.x + Kapre ≥0.3.
+Updated for TensorFlow 2.20 + Keras 3.x + Kapre ≥0.3.7
 """
 
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import (
     Input, Dense, Activation, Dropout, Flatten,
-    Convolution2D, MaxPooling2D, BatchNormalization
+    Conv2D, MaxPooling2D, BatchNormalization
 )
 from kapre import Melspectrogram, Magnitude
 
@@ -47,21 +47,21 @@ def build_convnet_model(args, last_layer=False):
     x = Magnitude()(x)
 
     # --- Conv block 1 ---
-    x = Convolution2D(64, (3, 3), padding="same", data_format="channels_first")(x)
+    x = Conv2D(64, (3, 3), padding="same", data_format="channels_first")(x)
     x = BatchNormalization()(x)
     x = Activation("relu")(x)
     x = MaxPooling2D(pool_size=(2, 2), data_format="channels_first")(x)
     x = Dropout(0.25)(x)
 
     # --- Conv block 2 ---
-    x = Convolution2D(128, (3, 3), padding="same", data_format="channels_first")(x)
+    x = Conv2D(128, (3, 3), padding="same", data_format="channels_first")(x)
     x = BatchNormalization()(x)
     x = Activation("relu")(x)
     x = MaxPooling2D(pool_size=(2, 2), data_format="channels_first")(x)
     x = Dropout(0.25)(x)
 
     # --- Conv block 3 ---
-    x = Convolution2D(256, (3, 3), padding="same", data_format="channels_first")(x)
+    x = Conv2D(256, (3, 3), padding="same", data_format="channels_first")(x)
     x = BatchNormalization()(x)
     x = Activation("relu")(x)
     x = MaxPooling2D(pool_size=(2, 2), data_format="channels_first")(x)

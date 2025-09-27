@@ -1,56 +1,27 @@
+"""
+example_tagging.py
+Run inference on a single audio file.
+"""
+
 import sys
 import numpy as np
+from tensorflow.keras.models import load_model
 from compact_cnn.prepare_audio import prepare_audio
-from compact_cnn import models as my_models
-from argparse import Namespace
-from keras import backend as K
 
-# Example tag list (replace with real dataset labels if available)
-TAGS = [
-    "rock", "pop", "alternative", "indie", "electronic", "female vocalists",
-    "dance", "00s", "alternative rock", "jazz", "beautiful", "metal",
-    "chillout", "male vocalists", "classic rock", "soul", "indie rock",
-    "Mellow", "electronica", "80s", "folk", "90s", "chill", "instrumental",
-    "punk", "oldies", "blues", "hard rock", "ambient", "acoustic", "experimental",
-    "Hip-Hop", "70s", "party", "country", "easy listening", "sexy", "catchy",
-    "funk", "electro", "heavy metal", "progressive rock", "60s", "rnb",
-    "indie pop", "sad", "house", "happy", "reggae", "classical"
-]
+if len(sys.argv) < 2:
+    print("Usage: python example_tagging.py <audiofile>")
+    sys.exit(1)
 
+filename = sys.argv[1]
+print(f"Loading model...")
+model = load_model("music_tagging_model.h5", compile=False)
 
-def load_model():
-    args = Namespace(
-        tf_type="melgram",
-        normalize="no",
-        decibel=True,
-        fmin=0.0,
-        fmax=6000,
-        n_mels=96,
-        trainable_fb=False,
-        trainable_kernel=False,
-    )
-    return my_models.build_convnet_model(args, last_layer=True)
+print(f"Processing {filename}...")
+x = prepare_audio(filename)
 
+# Add batch dimension: (1, 1, n_mels, time)
+x = np.expand_dims(x, axis=0)
 
-def run(filename, top_k=5, threshold=0.2):
-    audio = prepare_audio(filename)
-
-    # Ensure channels_first
-    assert K.image_data_format() == "channels_first"
-
-    model = load_model()
-    preds = model.predict(audio)[0]
-
-    top_indices = np.argsort(preds)[::-1][:top_k]
-    results = [(TAGS[i], preds[i]) for i in top_indices if preds[i] >= threshold]
-
-    print("\n🎶 Top Predictions:")
-    for tag, score in results:
-        print(f"{tag:20s} {score:.3f}")
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python example_tagging.py <audiofile>")
-    else:
-        run(sys.argv[1])
+print("Running inference...")
+pred = model.predict(x)
+print("Predictions:", pred[0])
