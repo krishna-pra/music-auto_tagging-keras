@@ -1,42 +1,60 @@
+# train.py
 """
-train.py
-Trains the CNN model and saves it.
+Train script (simple, loads all audio into memory — fine for small tests).
+Saves: music_tagging_model.keras (Keras native format) and music_tagging_model_weights.h5
 """
 
+import os
 import numpy as np
-import argparse
-from keras.optimizers import Adam
-from compact_cnn.models import build_convnet_model
+from types import SimpleNamespace
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.keras.optimizers import Adam
+
+from compact_cnn import models as my_models
+from compact_cnn.prepare_audio import prepare_audio
+
+DATA_DIR = "dataset"
+LABELS_FILE = "labels.npy"
+OUT_MODEL = "music_tagging_model.keras"
+OUT_WEIGHTS = "music_tagging_model_weights.h5"
+
+def load_data(dataset_dir=DATA_DIR, labels_file=LABELS_FILE):
+    files = sorted([f for f in os.listdir(dataset_dir) if f.lower().endswith((".wav", ".mp3"))])
+    if len(files) == 0:
+        raise RuntimeError("No audio files found in dataset/.")
+    if not os.path.exists(labels_file):
+        raise FileNotFoundError(f"{labels_file} not found. Run make_labels.py first.")
+    Y = np.load(labels_file)
+    if Y.shape[0] != len(files):
+        raise RuntimeError(f"labels.npy has {Y.shape[0]} rows but dataset contains {len(files)} audio files. They must match.")
+
+    X_list = []
+    for f in files:
+        path = os.path.join(dataset_dir, f)
+        mel = prepare_audio(path)  # (n_mels, frames, 1)
+        X_list.append(mel)
+    X = np.stack(X_list, axis=0)  # (N, n_mels, frames, 1)
+    return X, Y
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--n_mels", type=int, default=96)
-    parser.add_argument("--fmin", type=int, default=0)
-    parser.add_argument("--fmax", type=int, default=6000)
-    parser.add_argument("--decibel", action="store_true")
-    parser.add_argument("--trainable_fb", action="store_true")
-    parser.add_argument("--trainable_kernel", action="store_true")
-    args = parser.parse_args()
+    print("Loading data...")
+    X, Y = load_data()
+    print("X shape:", X.shape, "Y shape:", Y.shape)
 
-    X = np.load("X.npy")  # features (precomputed)
-    y = np.load("labels.npy")  # labels
+    args = SimpleNamespace(n_mels=X.shape[1])
+    model = my_models.build_convnet_model(args)
+    model.compile(optimizer=Adam(1e-4), loss="binary_crossentropy", metrics=["accuracy"])
 
-    model = build_convnet_model(args)
-    model.compile(
-        loss="binary_crossentropy",
-        optimizer=Adam(1e-4),
-        metrics=["accuracy"]
-    )
+    X_train, X_val, y_train, y_val = train_test_split(X, Y, test_size=0.1, random_state=42)
 
-    model.fit(
-        X, y,
-        batch_size=32,
-        epochs=10,
-        validation_split=0.2
-    )
+    checkpoint = ModelCheckpoint(OUT_MODEL, save_best_only=True, monitor="val_loss")
+    early = EarlyStopping(monitor="val_loss", patience=6, restore_best_weights=True)
+    model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=30, batch_size=8, callbacks=[checkpoint, early])
 
-    model.save("music_tagging_model.h5")
-    print("Saved model to music_tagging_model.h5")
+    # Also save weights in legacy h5 if you want to load them in older code
+    model.save_weights(OUT_WEIGHTS)
+    print("Training finished. Saved model:", OUT_MODEL, "and weights:", OUT_WEIGHTS)
 
 if __name__ == "__main__":
     main()

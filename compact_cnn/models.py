@@ -1,67 +1,56 @@
+# compact_cnn/models.py
 """
-Defines CNN model architectures for music auto-tagging.
-Compatible with TF 2.20 + Keras 3.x + Kapre 0.3.7
+Compact CNN for music auto-tagging.
+Input: mel-spectrogram computed by librosa, shape (n_mels, time, 1).
+Compatible with TF 2.20 + Keras 3.x (no kapre required).
 """
 
-# compact_cnn/models.py
+from types import SimpleNamespace
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import (
-    Input, Dense, Activation, Dropout, Flatten,
-    Conv2D, MaxPooling2D, BatchNormalization
+    Input, Conv2D, BatchNormalization, Activation,
+    MaxPooling2D, Dropout, Flatten, Dense
 )
 
-# ✅ updated Kapre imports for modern versions
-from kapre.time_frequency import Melspectrogram, Spectrogram
-from kapre.utils import Magnitude
 
-try:
-    from kapre.augmentation import AdditiveNoise
-except ImportError:
-    AdditiveNoise = None
-
-
-def build_convnet_model(args, last_layer=False):
+def build_convnet_model(args: SimpleNamespace, last_layer: bool = False) -> Model:
     """
     Build a compact CNN for music auto-tagging.
-    Args:
-        args: Namespace with spectrogram config.
-        last_layer: If True, returns logits (no sigmoid).
+    args must contain: n_mels (int)
+    We accept variable time dimension via None.
     """
-    input_shape = (1, args.n_mels, None)  # channels_first
+    n_mels = args.n_mels
 
-    melgram_input = Input(shape=input_shape)
+    # Input is channels-last: (n_mels, time, 1)
+    input_shape = (n_mels, None, 1)
+    inp = Input(shape=input_shape, name="mel_input")
 
-    # Kapre frontend
-    x = Melspectrogram(
-        sr=12000,
-        n_mels=args.n_mels,
-        fmin=args.fmin,
-        fmax=args.fmax,
-        power_melgram=2.0,
-        return_decibel_melgram=args.decibel,
-        trainable_fb=args.trainable_fb,
-        trainable_kernel=args.trainable_kernel,
-        input_data_format="channels_first",
-        output_data_format="channels_first",
-    )(melgram_input)
+    x = Conv2D(64, (3, 3), padding="same")(inp)
+    x = BatchNormalization()(x)
+    x = Activation("relu")(x)
+    x = MaxPooling2D((2, 2))(x)
+    x = Dropout(0.25)(x)
 
-    x = Magnitude()(x)
+    x = Conv2D(128, (3, 3), padding="same")(x)
+    x = BatchNormalization()(x)
+    x = Activation("relu")(x)
+    x = MaxPooling2D((2, 2))(x)
+    x = Dropout(0.25)(x)
 
-    # --- Conv blocks ---
-    for filters in [64, 128, 256]:
-        x = Conv2D(filters, (3, 3), padding="same", data_format="channels_first")(x)
-        x = BatchNormalization()(x)
-        x = Activation("relu")(x)
-        x = MaxPooling2D(pool_size=(2, 2), data_format="channels_first")(x)
-        x = Dropout(0.25)(x)
+    x = Conv2D(256, (3, 3), padding="same")(x)
+    x = BatchNormalization()(x)
+    x = Activation("relu")(x)
+    x = MaxPooling2D((2, 2))(x)
+    x = Dropout(0.25)(x)
 
     x = Flatten()(x)
     x = Dense(512, activation="relu")(x)
     x = Dropout(0.5)(x)
 
     if last_layer:
-        output = Dense(50)(x)  # logits
+        out = Dense(50, name="logits")(x)
     else:
-        output = Dense(50, activation="sigmoid")(x)  # multi-label
+        out = Dense(50, activation="sigmoid", name="preds")(x)
 
-    return Model(inputs=melgram_input, outputs=output)
+    model = Model(inputs=inp, outputs=out, name="compact_cnn_mel")
+    return model
