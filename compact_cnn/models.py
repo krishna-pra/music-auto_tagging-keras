@@ -1,5 +1,4 @@
 """
-models.py
 Defines CNN model architectures for music auto-tagging.
 Compatible with TF 2.20 + Keras 3.x + Kapre 0.3.7
 """
